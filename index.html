@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>지출 품의 문안 생성기</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1f2933;
+    --muted: #6b7280;
+    --line: #d9dde3;
+    --accent: #2563eb;
+    --accent-weak: #e8efff;
+    --danger: #dc2626;
+    --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 20px 16px 8px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 12px 16px 40px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  section.card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  section.card h2 { margin: 0 0 12px; font-size: 17px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 12px;
+  }
+  .grid .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 3px; }
+  input[type=text], input[type=number] {
+    width: 100%;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: inherit;
+    background: #fff;
+    color: var(--text);
+  }
+  input:focus { outline: 2px solid var(--accent-weak); border-color: var(--accent); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  .items-head { display: flex; justify-content: space-between; align-items: center; margin: 18px 0 8px; }
+  .items-head h3 { margin: 0; font-size: 15px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 5px 4px; text-align: left; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  td input { padding: 6px 7px; }
+  td.amount { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  col.c-name { width: 34%; }
+  col.c-price { width: 15%; }
+  col.c-qty { width: 10%; }
+  col.c-unit { width: 9%; }
+  col.c-times { width: 9%; }
+  col.c-amt { width: 16%; }
+  col.c-del { width: 7%; }
+
+  button {
+    font: inherit;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: #fff;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { filter: brightness(0.95); }
+  button.del { color: var(--danger); padding: 4px 8px; }
+  button.del:hover { background: #fdecec; }
+  button.add { color: var(--accent); }
+  button.add:hover { background: var(--accent-weak); }
+
+  .total {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--accent-weak);
+    border-radius: 8px;
+    font-weight: 600;
+  }
+
+  .out-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .out-head h2 { margin: 0; }
+  .out-actions { display: flex; gap: 8px; align-items: center; }
+  #toast { font-size: 13px; color: var(--ok); min-width: 70px; }
+  pre#output {
+    margin: 0;
+    padding: 14px;
+    background: #fbfbfc;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+    font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+    font-size: 15px;
+    line-height: 1.8;
+    min-height: 220px;
+  }
+  .indent-opt { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .indent-opt select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<header>
+  <h1>지출 품의 문안 생성기</h1>
+  <p>입력하면 오른쪽 문안이 바로 바뀝니다. 데이터는 이 화면 안에서만 쓰이고 어디에도 저장되지 않습니다.</p>
+</header>
+
+<main>
+  <!-- 입력 -->
+  <section class="card">
+    <h2>입력</h2>
+    <div class="grid">
+      <div>
+        <label for="year">학년도</label>
+        <input type="text" id="year" value="2026" inputmode="numeric">
+      </div>
+      <div>
+        <label for="grade">학년·교과</label>
+        <input type="text" id="grade" value="5학년 실과">
+      </div>
+      <div>
+        <label for="title">지출 항목명</label>
+        <input type="text" id="title" value="학습준비물 구입비">
+      </div>
+      <div>
+        <label for="round">차수</label>
+        <input type="number" id="round" value="2" min="1">
+        <div class="hint">비워 두면 제목에서 차수가 빠집니다.</div>
+      </div>
+      <div class="full">
+        <label for="related">관련 공문</label>
+        <input type="text" id="related" value="00초등학교-1932(2026. 3. 4.) 2026학년도 00초 학습준비물 지원 계획">
+        <div class="hint">비워 두면 "관련" 항목을 빼고 번호를 다시 매깁니다.</div>
+      </div>
+      <div>
+        <label for="purpose">활용 수업</label>
+        <input type="text" id="purpose" value="발명">
+        <div class="hint">"○○ 수업에 활용할"의 ○○ 부분</div>
+      </div>
+      <div>
+        <label for="target">구입 대상</label>
+        <input type="text" id="target" value="학습준비물">
+        <div class="hint">항목명에서 자동으로 채워집니다. 직접 고쳐도 됩니다.</div>
+      </div>
+      <div class="full">
+        <label for="attach">붙임</label>
+        <input type="text" id="attach" value="지출 품의서 1부">
+      </div>
+    </div>
+
+    <div class="items-head">
+      <h3>구입 품목</h3>
+      <button type="button" class="add" id="addRow">+ 줄 추가</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <colgroup>
+          <col class="c-name"><col class="c-price"><col class="c-qty"><col class="c-unit"><col class="c-times"><col class="c-amt"><col class="c-del">
+        </colgroup>
+        <thead>
+          <tr><th>품목명</th><th>단가(원)</th><th>수량</th><th>단위</th><th>회차</th><th style="text-align:right">금액</th><th></th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="total" id="totalBox">합계: 0원</div>
+  </section>
+
+  <!-- 출력 -->
+  <section class="card">
+    <div class="out-head">
+      <h2>문안</h2>
+      <div class="out-actions">
+        <span id="toast" aria-live="polite"></span>
+        <button type="button" class="primary" id="copyBtn">전체 복사</button>
+      </div>
+    </div>
+    <pre id="output"></pre>
+    <div class="indent-opt">
+      <label for="indentSize" style="margin:0">들여쓰기 칸 수</label>
+      <select id="indentSize">
+        <option value="0">0칸</option>
+        <option value="1">1칸</option>
+        <option value="2" selected>2칸</option>
+        <option value="4">4칸</option>
+      </select>
+      <span>(가. 는 1단계, - 는 2단계 들여쓰기)</span>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const rowsEl = $("rows");
+
+  // ---------- 숫자 도우미 ----------
+  function toNum(v) {
+    const n = Number(String(v).replace(/[^\d.]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  }
+  function comma(n) {
+    return Math.round(n).toLocaleString("ko-KR");
+  }
+
+  // 숫자 → 한글 금액 (예: 150000 → 십오만)
+  function toKorean(num) {
+    num = Math.floor(num);
+    if (num <= 0) return "영";
+    const digits = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
+    const small = ["", "십", "백", "천"];
+    const big = ["", "만", "억", "조", "경"];
+    let result = "";
+    let unitIdx = 0;
+    while (num > 0) {
+      const chunk = num % 10000;
+      if (chunk > 0) {
+        let part = "";
+        let c = chunk;
+        for (let i = 0; i < 4 && c > 0; i++) {
+          const d = c % 10;
+          if (d > 0) {
+            // 십·백·천 자리의 1은 '일'을 생략 (예: 십오만, 백만)
+            const dWord = (d === 1 && i > 0) ? "" : digits[d];
+            part = dWord + small[i] + part;
+          }
+          c = Math.floor(c / 10);
+        }
+        result = part + big[unitIdx] + result;
+      }
+      num = Math.floor(num / 10000);
+      unitIdx++;
+    }
+    return result;
+  }
+
+  // 받침 유무로 을/를 고르기
+  function eulReul(word) {
+    const w = (word || "").trim();
+    if (!w) return "을";
+    const ch = w.charCodeAt(w.length - 1);
+    if (ch < 0xac00 || ch > 0xd7a3) return "을(를)";
+    return (ch - 0xac00) % 28 === 0 ? "를" : "을";
+  }
+
+  // ---------- 품목 줄 ----------
+  function addRow(data) {
+    data = data || {};
+    const tr = document.createElement("tr");
+    tr.innerHTML =
+      '<td><input type="text" class="f-name" placeholder="품목명"></td>' +
+      '<td><input type="text" class="f-price" inputmode="numeric" placeholder="0"></td>' +
+      '<td><input type="text" class="f-qty" inputmode="numeric" placeholder="0"></td>' +
+      '<td><input type="text" class="f-unit" placeholder="개"></td>' +
+      '<td><input type="text" class="f-times" inputmode="numeric" placeholder="1"></td>' +
+      '<td class="amount">0원</td>' +
+      '<td><button type="button" class="del" title="이 줄 삭제">삭제</button></td>';
+    tr.querySelector(".f-name").value = data.name || "";
+    tr.querySelector(".f-price").value = data.price != null ? comma(data.price) : "";
+    tr.querySelector(".f-qty").value = data.qty != null ? data.qty : "";
+    tr.querySelector(".f-unit").value = data.unit || "개";
+    tr.querySelector(".f-times").value = data.times != null ? data.times : 1;
+
+    // 단가 입력 시 천 단위 쉼표 자동 표시
+    const priceInput = tr.querySelector(".f-price");
+    priceInput.addEventListener("input", () => {
+      const raw = priceInput.value.replace(/[^\d]/g, "");
+      priceInput.value = raw ? comma(Number(raw)) : "";
+    });
+
+    tr.querySelector(".del").addEventListener("click", () => {
+      tr.remove();
+      if (!rowsEl.children.length) addRow();
+      render();
+    });
+    rowsEl.appendChild(tr);
+    render();
+    return tr;
+  }
+
+  function readRows() {
+    return Array.from(rowsEl.querySelectorAll("tr")).map((tr) => {
+      const name = tr.querySelector(".f-name").value.trim();
+      const price = toNum(tr.querySelector(".f-price").value);
+      const qty = toNum(tr.querySelector(".f-qty").value);
+      const unit = tr.querySelector(".f-unit").value.trim() || "개";
+      const timesRaw = tr.querySelector(".f-times").value.trim();
+      const times = timesRaw === "" ? 1 : toNum(timesRaw);
+      const amount = price * qty * times;
+      tr.querySelector(".amount").textContent = comma(amount) + "원";
+      return { name, price, qty, unit, times, amount };
+    });
+  }
+
+  // ---------- 구입 대상 자동 채우기 ----------
+  let targetTouched = false;
+  function deriveTarget(title) {
+    return title.trim().replace(/\s*(구입비|구매비|구입|구매|비용|비)$/, "").trim() || title.trim();
+  }
+  $("target").addEventListener("input", () => { targetTouched = true; });
+  $("title").addEventListener("input", () => {
+    if (!targetTouched) $("target").value = deriveTarget($("title").value);
+  });
+
+  // ---------- 문안 만들기 ----------
+  function render() {
+    const items = readRows();
+    const total = items.reduce((s, it) => s + it.amount, 0);
+    const kor = toKorean(total);
+    $("totalBox").textContent = "합계: " + comma(total) + "원 (금" + kor + "원)";
+
+    const year = $("year").value.trim();
+    const grade = $("grade").value.trim();
+    const title = $("title").value.trim();
+    const round = $("round").value.trim();
+    const related = $("related").value.trim();
+    const purpose = $("purpose").value.trim();
+    const target = $("target").value.trim() || deriveTarget(title);
+    const attach = $("attach").value.trim();
+
+    const ind = " ".repeat(Number($("indentSize").value));
+    const ind1 = ind;
+    const ind2 = ind + ind;
+
+    const lines = [];
+    const head = [year ? year + "학년도" : "", grade, title ? title + " 지출 품의" : "지출 품의"]
+      .filter(Boolean).join(" ");
+    lines.push(head + (round ? "(" + round + "차)" : ""));
+
+    let no = 1;
+    if (related) lines.push((no++) + ". 관련: " + related);
+
+    const purposeText = purpose ? purpose + " 수업에 활용할 " : "";
+    lines.push((no++) + ". " + (year ? year + "학년도 " : "") + purposeText +
+      target + eulReul(target) + " 아래와 같이 구입하고자 합니다.");
+
+    lines.push(ind1 + "가. " + target + " 구입 계획");
+    const filled = items.filter((it) => it.name || it.price || it.qty);
+    if (filled.length === 0) {
+      lines.push(ind2 + "- (품목을 입력하세요)");
+    } else {
+      filled.forEach((it) => {
+        lines.push(ind2 + "- " + (it.name || "(품목명)") + ": " +
+          comma(it.price) + "원 * " + comma(it.qty) + it.unit + " * " +
+          comma(it.times) + "회 = " + comma(it.amount) + "원");
+      });
+    }
+    lines.push(ind1 + "나. " + target + " 구입에 필요한 비용 합계: 금" +
+      comma(total) + "원(금" + kor + "원)");
+
+    lines.push(attach ? "붙임 " + attach + ". 끝." : "끝.");
+
+    $("output").textContent = lines.join("\n");
+  }
+
+  // ---------- 복사 ----------
+  function showToast(msg) {
+    const t = $("toast");
+    t.textContent = msg;
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => { t.textContent = ""; }, 2000);
+  }
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+  $("copyBtn").addEventListener("click", async () => {
+    const text = $("output").textContent;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        showToast("복사했습니다");
+        return;
+      }
+    } catch (e) { /* 아래 방법으로 다시 시도 */ }
+    showToast(fallbackCopy(text) ? "복사했습니다" : "복사 실패: 직접 선택해 복사하세요");
+  });
+
+  // ---------- 이벤트 연결 ----------
+  document.querySelector("main").addEventListener("input", render);
+  $("indentSize").addEventListener("change", render);
+  $("addRow").addEventListener("click", () => {
+    const tr = addRow();
+    tr.querySelector(".f-name").focus();
+  });
+
+  // 예시 데이터로 시작
+  addRow({ name: "오토마타 발레리나 만들기", price: 5000, qty: 30, unit: "개", times: 1 });
+})();
+</script>
+</body>
+</html>
