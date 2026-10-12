@@ -126,6 +126,8 @@
     min-height: 220px;
   }
   .indent-opt { display: flex; gap: 6px; align-items: center; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  select.sel { font: inherit; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: #fff; color: var(--text); }
+  .grid select.sel { width: 100%; }
   .indent-opt select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); }
 </style>
 </head>
@@ -140,6 +142,15 @@
   <section class="card">
     <h2>입력</h2>
     <div class="grid">
+      <div class="full">
+        <label for="template">양식</label>
+        <select id="template" class="sel">
+          <option value="supplies">학습준비물 구입</option>
+          <option value="classroom">학급 운영비</option>
+          <option value="fieldtrip">현장체험학습비</option>
+        </select>
+        <div class="hint">양식을 바꾸면 아래 칸과 품목이 그 양식의 예시로 바뀝니다.</div>
+      </div>
       <div>
         <label for="year">학년도</label>
         <input type="text" id="year" value="2026" inputmode="numeric">
@@ -163,12 +174,12 @@
         <div class="hint">비워 두면 "관련" 항목을 빼고 번호를 다시 매깁니다.</div>
       </div>
       <div>
-        <label for="purpose">활용 수업</label>
+        <label for="purpose" id="purposeLabel">활용 수업</label>
         <input type="text" id="purpose" value="발명">
-        <div class="hint">"○○ 수업에 활용할"의 ○○ 부분</div>
+        <div class="hint" id="purposeHint">"○○ 수업에 활용할"의 ○○ 부분</div>
       </div>
       <div>
-        <label for="target">구입 대상</label>
+        <label for="target" id="targetLabel">구입 대상</label>
         <input type="text" id="target" value="학습준비물">
         <div class="hint">항목명에서 자동으로 채워집니다. 직접 고쳐도 됩니다.</div>
       </div>
@@ -208,13 +219,17 @@
     <pre id="output"></pre>
     <div class="indent-opt">
       <label for="indentSize" style="margin:0">들여쓰기 칸 수</label>
-      <select id="indentSize">
-        <option value="0">0칸</option>
+      <select id="indentSize" class="sel">
+        <option value="0" selected>0칸</option>
         <option value="1">1칸</option>
-        <option value="2" selected>2칸</option>
+        <option value="2">2칸</option>
         <option value="4">4칸</option>
       </select>
       <span>(가. 는 1단계, - 는 2단계 들여쓰기)</span>
+    </div>
+    <div class="indent-opt">
+      <input type="checkbox" id="fullIl" checked>
+      <label for="fullIl" style="margin:0">한글 금액의 십·백·천 앞에도 '일' 붙이기 (예: 금일십오만원)</label>
     </div>
   </section>
 </main>
@@ -235,8 +250,8 @@
     return Math.round(n).toLocaleString("ko-KR");
   }
 
-  // 숫자 → 한글 금액 (예: 150000 → 십오만)
-  function toKorean(num) {
+  // 숫자 → 한글 금액 (예: 150000 → 일십오만 / fullIl이 false면 십오만)
+  function toKorean(num, fullIl) {
     num = Math.floor(num);
     if (num <= 0) return "영";
     const digits = ["", "일", "이", "삼", "사", "오", "육", "칠", "팔", "구"];
@@ -252,8 +267,8 @@
         for (let i = 0; i < 4 && c > 0; i++) {
           const d = c % 10;
           if (d > 0) {
-            // 십·백·천 자리의 1은 '일'을 생략 (예: 십오만, 백만)
-            const dWord = (d === 1 && i > 0) ? "" : digits[d];
+            // fullIl이 false면 십·백·천 자리의 1은 '일'을 생략 (예: 십오만, 백만)
+            const dWord = (!fullIl && d === 1 && i > 0) ? "" : digits[d];
             part = dWord + small[i] + part;
           }
           c = Math.floor(c / 10);
@@ -273,6 +288,72 @@
     const ch = w.charCodeAt(w.length - 1);
     if (ch < 0xac00 || ch > 0xd7a3) return "을(를)";
     return (ch - 0xac00) % 28 === 0 ? "를" : "을";
+  }
+
+  // ---------- 양식 ----------
+  // c: { year, grade, purpose, target } → 문장 조각을 돌려줌
+  const TEMPLATES = {
+    supplies: {
+      defaults: {
+        title: "학습준비물 구입비", grade: "5학년 실과", purpose: "발명", target: "학습준비물", attach: "지출 품의서 1부",
+        items: [{ name: "오토마타 발레리나 만들기", price: 5000, qty: 30, unit: "개", times: 1 }]
+      },
+      purposeLabel: "활용 수업", purposeHint: "\"○○ 수업에 활용할\"의 ○○ 부분",
+      targetLabel: "구입 대상", autoTarget: true,
+      sentence: (c) => (c.year ? c.year + "학년도 " : "") + (c.purpose ? c.purpose + " 수업에 활용할 " : "") +
+        c.target + eulReul(c.target) + " 아래와 같이 구입하고자 합니다.",
+      planLabel: (c) => c.target + " 구입 계획",
+      totalLabel: (c) => c.target + " 구입에 필요한 비용 합계"
+    },
+    classroom: {
+      defaults: {
+        title: "학급 운영비", grade: "5학년 2반", purpose: "학급 환경 정비", target: "학급 운영 물품", attach: "지출 품의서 1부",
+        items: [
+          { name: "게시판 꾸미기 재료", price: 15000, qty: 2, unit: "세트", times: 1 },
+          { name: "학급 문고용 도서", price: 13000, qty: 5, unit: "권", times: 1 }
+        ]
+      },
+      purposeLabel: "운영 목적", purposeHint: "\"○○을 위한\"의 ○○ 부분",
+      targetLabel: "구입 대상", autoTarget: false,
+      sentence: (c) => (c.year ? c.year + "학년도 " : "") + (c.grade ? c.grade + " " : "") +
+        (c.purpose ? c.purpose + eulReul(c.purpose) + " 위한 " : "학급 운영에 필요한 ") +
+        c.target + eulReul(c.target) + " 아래와 같이 구입하고자 합니다.",
+      planLabel: (c) => c.target + " 구입 계획",
+      totalLabel: (c) => c.target + " 구입에 필요한 비용 합계"
+    },
+    fieldtrip: {
+      defaults: {
+        title: "현장체험학습비", grade: "5학년", purpose: "국립과천과학관", target: "현장체험학습", attach: "현장체험학습 운영 계획서 1부",
+        items: [
+          { name: "버스 임차료", price: 450000, qty: 2, unit: "대", times: 1 },
+          { name: "입장료", price: 2000, qty: 60, unit: "명", times: 1 }
+        ]
+      },
+      purposeLabel: "체험 장소", purposeHint: "\"○○ 현장체험학습\"의 ○○ 부분",
+      targetLabel: "활동명", autoTarget: false,
+      sentence: (c) => (c.year ? c.year + "학년도 " : "") + (c.grade ? c.grade + " " : "") +
+        (c.purpose ? c.purpose + " " : "") + c.target + eulReul(c.target) + " 아래와 같이 운영하고자 합니다.",
+      planLabel: (c) => c.target + " 소요 경비 내역",
+      totalLabel: (c) => c.target + " 운영에 필요한 비용 합계"
+    }
+  };
+  const tpl = () => TEMPLATES[$("template").value];
+
+  function applyTemplate() {
+    const t = tpl();
+    const d = t.defaults;
+    $("title").value = d.title;
+    $("grade").value = d.grade;
+    $("purpose").value = d.purpose;
+    $("target").value = d.target;
+    $("attach").value = d.attach;
+    $("purposeLabel").textContent = t.purposeLabel;
+    $("purposeHint").textContent = t.purposeHint;
+    $("targetLabel").textContent = t.targetLabel;
+    targetTouched = !t.autoTarget;
+    rowsEl.innerHTML = "";
+    d.items.forEach((it) => addRow(it));
+    render();
   }
 
   // ---------- 품목 줄 ----------
@@ -338,7 +419,7 @@
   function render() {
     const items = readRows();
     const total = items.reduce((s, it) => s + it.amount, 0);
-    const kor = toKorean(total);
+    const kor = toKorean(total, $("fullIl").checked);
     $("totalBox").textContent = "합계: " + comma(total) + "원 (금" + kor + "원)";
 
     const year = $("year").value.trim();
@@ -362,11 +443,11 @@
     let no = 1;
     if (related) lines.push((no++) + ". 관련: " + related);
 
-    const purposeText = purpose ? purpose + " 수업에 활용할 " : "";
-    lines.push((no++) + ". " + (year ? year + "학년도 " : "") + purposeText +
-      target + eulReul(target) + " 아래와 같이 구입하고자 합니다.");
+    const t = tpl();
+    const ctx = { year, grade, purpose, target };
+    lines.push((no++) + ". " + t.sentence(ctx));
 
-    lines.push(ind1 + "가. " + target + " 구입 계획");
+    lines.push(ind1 + "가. " + t.planLabel(ctx));
     const filled = items.filter((it) => it.name || it.price || it.qty);
     if (filled.length === 0) {
       lines.push(ind2 + "- (품목을 입력하세요)");
@@ -377,7 +458,7 @@
           comma(it.times) + "회 = " + comma(it.amount) + "원");
       });
     }
-    lines.push(ind1 + "나. " + target + " 구입에 필요한 비용 합계: 금" +
+    lines.push(ind1 + "나. " + t.totalLabel(ctx) + ": 금" +
       comma(total) + "원(금" + kor + "원)");
 
     lines.push(attach ? "붙임 " + attach + ". 끝." : "끝.");
@@ -420,13 +501,15 @@
   // ---------- 이벤트 연결 ----------
   document.querySelector("main").addEventListener("input", render);
   $("indentSize").addEventListener("change", render);
+  $("fullIl").addEventListener("change", render);
+  $("template").addEventListener("change", applyTemplate);
   $("addRow").addEventListener("click", () => {
     const tr = addRow();
     tr.querySelector(".f-name").focus();
   });
 
   // 예시 데이터로 시작
-  addRow({ name: "오토마타 발레리나 만들기", price: 5000, qty: 30, unit: "개", times: 1 });
+  applyTemplate();
 })();
 </script>
 </body>
